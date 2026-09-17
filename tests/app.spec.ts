@@ -1,10 +1,28 @@
 import { test, expect, type Page } from '@playwright/test';
 
-test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+test('AI responds with a white stone and returns the turn to the human', async ({ page }) => {
+  await goToAiPlayPage(page);
+
+  await getIntersection(page, 0, 0).click();
+
+  await expect(getIntersection(page, 0, 0)).toHaveAttribute('data-status', 'black');
+  await expect(page.locator('[data-status="black"]')).toHaveCount(1);
+  await expect(page.locator('[data-status="white"]')).toHaveCount(1);
+  await expect(page.getByText(`Black's turn`, { exact: true })).toBeVisible();
+});
+
+test('starting a new game preserves AI mode', async ({ page }) => {
+  await goToAiPlayPage(page);
+  await getNewGameButton(page).click();
+
+  await getIntersection(page, 0, 0).click();
+
+  await expect(page.locator('[data-status="white"]')).toHaveCount(1);
 });
 
 test('shows whose turn it is', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   await expect(page.getByText(`Black's turn`, { exact: true })).toBeVisible();
 
   await getIntersection(page, 0, 0).click();
@@ -13,6 +31,8 @@ test('shows whose turn it is', async ({ page }) => {
 });
 
 test('shows who won the game', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   await play(
     page,
     [0, 0], [0, 7],
@@ -26,6 +46,8 @@ test('shows who won the game', async ({ page }) => {
 });
 
 test('clicking places alternating stones, starting with black', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   const first = getIntersection(page, 0, 0);
   await first.click();
   await expect(first).toHaveAttribute('data-status', 'black');
@@ -40,6 +62,8 @@ test('clicking places alternating stones, starting with black', async ({ page })
 });
 
 test('marks the last move made', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   const first = getIntersection(page, 0, 0);
   const second = getIntersection(page, 1, 0);
 
@@ -53,6 +77,8 @@ test('marks the last move made', async ({ page }) => {
 });
 
 test('marks the stones of the line that won the game', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   await play(
     page,
     [0, 0], [0, 7],
@@ -74,6 +100,8 @@ test('marks the stones of the line that won the game', async ({ page }) => {
 });
 
 test('clicking an occupied intersection is ignored', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   const first = getIntersection(page, 0, 0);
   await first.click();
 
@@ -88,6 +116,8 @@ test('clicking an occupied intersection is ignored', async ({ page }) => {
 });
 
 test('tab reaches the new game button and then the center intersection', async ({ page }) => {
+  await goToHomePage(page);
+
   await page.keyboard.press('Tab');
   await expect(getNewGameButton(page)).toBeFocused();
 
@@ -96,6 +126,8 @@ test('tab reaches the new game button and then the center intersection', async (
 });
 
 test('tab returns to the last focused intersection', async ({ page }) => {
+  await goToHomePage(page);
+
   const intersection = getIntersection(page, 2, 2);
   await intersection.focus();
 
@@ -107,6 +139,8 @@ test('tab returns to the last focused intersection', async ({ page }) => {
 });
 
 test('starting a new game clears the board', async ({ page }) => {
+  await goToManualPlayPage(page);
+
   const first = getIntersection(page, 0, 0);
   const second = getIntersection(page, 1, 0);
   await first.click();
@@ -119,6 +153,8 @@ test('starting a new game clears the board', async ({ page }) => {
 });
 
 test('starting a new game resets the board tab stop to the center', async ({ page }) => {
+  await goToHomePage(page);
+
   await getIntersection(page, 2, 2).focus();
 
   await getNewGameButton(page).click();
@@ -130,6 +166,8 @@ test('starting a new game resets the board tab stop to the center', async ({ pag
 
 for (const key of ['Enter', 'Space']) {
   test(`pressing ${key} on the focused intersection places a stone on it`, async ({ page }) => {
+    await goToHomePage(page);
+
     const intersection = getIntersection(page, 0, 0);
     await intersection.focus();
     await page.keyboard.press(key);
@@ -139,6 +177,8 @@ for (const key of ['Enter', 'Space']) {
 }
 
 test('arrow keys navigate focus to adjacent intersections', async ({ page }) => {
+  await goToHomePage(page);
+
   await getIntersection(page, 0, 0).focus();
 
   await page.keyboard.press('ArrowUp');
@@ -155,6 +195,8 @@ test('arrow keys navigate focus to adjacent intersections', async ({ page }) => 
 });
 
 test('arrow keys keep focus in place at the edges of the board', async ({ page }) => {
+  await goToHomePage(page);
+
   // The two opposite corners between them exercise all four edges.
   const topLeft = getIntersection(page, -7, 7);
   await topLeft.focus();
@@ -179,6 +221,8 @@ test.describe('on a device without hover (mobile)', () => {
   test.use({ hasTouch: true });
 
   test('the first tap previews a stone and the second tap places it', async ({ page }) => {
+    await goToHomePage(page);
+
     const intersection = getIntersection(page, 0, 0);
 
     await expect(intersection).not.toHaveAttribute('data-previewed');
@@ -192,6 +236,8 @@ test.describe('on a device without hover (mobile)', () => {
   });
 
   test('tapping another intersection moves the preview to it', async ({ page }) => {
+    await goToHomePage(page);
+
     const first = getIntersection(page, 0, 0);
     const second = getIntersection(page, 1, 0);
 
@@ -203,6 +249,19 @@ test.describe('on a device without hover (mobile)', () => {
     await expect(second).toHaveAttribute('data-previewed');
   });
 });
+
+async function goToHomePage(page: Page) {
+  await page.goto('/');
+}
+
+// Allows explicit control of both players' moves without AI.
+async function goToManualPlayPage(page: Page) {
+  await page.goto('/?mode=manual');
+}
+
+async function goToAiPlayPage(page: Page) {
+  await page.goto('/?mode=ai');
+}
 
 function getNewGameButton(page: Page) {
   return page.getByRole('button', { name: 'New game' });

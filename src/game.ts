@@ -1,33 +1,50 @@
 export type Coordinate = { readonly x: number; readonly y: number };
 
+export type Player = 'human' | 'ai';
+
+export type GameMode = 'manual' | 'ai';
+
 export type GameState = {
+  readonly mode: GameMode;
   readonly moves: readonly Coordinate[];
   readonly previewedStone: Coordinate | null;
 };
 
 export const initialGameState: GameState = {
+  mode: 'manual',
   moves: [],
   previewedStone: null,
 };
 
-export function placeStone(game: GameState, coordinate: Coordinate): GameState {
-  if (!canPlaceStone(game, coordinate)) return game;
+export function placeStone(game: GameState, player: Player, coordinate: Coordinate): GameState {
+  if (!canPlaceStone(game, player, coordinate)) return game;
 
   return {
+    ...game,
     moves: [...game.moves, coordinate],
     previewedStone: null,
   };
 }
 
 export function previewOrPlaceStone(game: GameState, coordinate: Coordinate): GameState {
-  if (!canPlaceStone(game, coordinate)) return game;
-  if (isPreviewedAt(game, coordinate)) return placeStone(game, coordinate);
+  if (!canPlaceStone(game, 'human', coordinate)) return game;
+  if (isPreviewedAt(game, coordinate)) return placeStone(game, 'human', coordinate);
 
   return { ...game, previewedStone: coordinate };
 }
 
-function canPlaceStone(game: GameState, coordinate: Coordinate): boolean {
-  return statusOf(game).kind === 'playing' && statusAt(game, coordinate).kind === 'empty';
+function canPlaceStone(game: GameState, player: Player, coordinate: Coordinate): boolean {
+  const status = statusOf(game);
+  if (status.kind !== 'playing' || statusAt(game, coordinate).kind !== 'empty') return false;
+
+  if (game.mode === 'manual') return player === 'human';
+
+  return player === (status.currentColor === 'black' ? 'human' : 'ai');
+}
+
+export function chooseAiMove(game: GameState): Coordinate | undefined {
+  const legalMoves = boardCoordinates.filter((coordinate) => canPlaceStone(game, 'ai', coordinate));
+  return legalMoves[Math.floor(Math.random() * legalMoves.length)];
 }
 
 export type StoneColor = 'black' | 'white';

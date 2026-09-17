@@ -1,11 +1,13 @@
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Board } from './Board.tsx';
 import { GameMessage } from './GameMessage.tsx';
 import { NewGameButton } from './NewGameButton.tsx';
 import {
   type Coordinate,
+  type GameMode,
   type GameStatus,
   type IntersectionStatus,
+  chooseAiMove,
   coordinatesEqual,
   initialGameState,
   keyOf,
@@ -22,10 +24,11 @@ const centerCoordinate: Coordinate = { x: 0, y: 0 };
 
 type GameProps = {
   className?: string;
+  mode: GameMode;
 }
 
-export function Game({ className }: GameProps) {
-  const { status, statusAt, placeStone, previewOrPlaceStone, resetGame } = useGame();
+export function Game({ className, mode }: GameProps) {
+  const { status, statusAt, placeStone, previewOrPlaceStone, resetGame } = useGame(mode);
   const {
     registerIntersection,
     focusIntersection,
@@ -94,15 +97,23 @@ type UseGameResult = {
   resetGame: () => void;
 };
 
-function useGame(): UseGameResult {
-  const [game, setGame] = useState(initialGameState);
+function useGame(mode: GameMode): UseGameResult {
+  const [game, setGame] = useState(() => ({ ...initialGameState, mode }));
+
+  useEffect(() => {
+    const aiMove = chooseAiMove(game);
+    if (!aiMove) return;
+
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- The AI takes a separate turn in response to committed game state.
+    setGame((prev) => placeStone(prev, 'ai', aiMove));
+  }, [game]);
 
   return {
     status: statusOf(game),
     statusAt: (coordinate) => statusAt(game, coordinate),
-    placeStone: (coordinate) => setGame((prev) => placeStone(prev, coordinate)),
+    placeStone: (coordinate) => setGame((prev) => placeStone(prev, 'human', coordinate)),
     previewOrPlaceStone: (coordinate) => setGame((prev) => previewOrPlaceStone(prev, coordinate)),
-    resetGame: () => setGame(initialGameState),
+    resetGame: () => setGame({ ...initialGameState, mode }),
   };
 }
 

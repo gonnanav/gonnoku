@@ -1,22 +1,29 @@
-import { describe, expect, test } from 'vitest';
+import { assert, describe, expect, test } from 'vitest';
 import {
   boardCoordinates,
+  chooseAiMove,
   initialGameState,
   placeStone,
   previewOrPlaceStone,
   statusAt,
   statusOf,
   type Coordinate,
+  type GameState,
 } from './game.ts';
+
+const black = expect.objectContaining({ kind: 'black' });
+const white = expect.objectContaining({ kind: 'white' });
+const empty = expect.objectContaining({ kind: 'empty' });
 
 // Plays the moves in order, starting from a new game.
 function play(...moves: Coordinate[]) {
-  return moves.reduce(placeStone, initialGameState);
+  return moves.reduce(
+    (game, coordinate) => placeStone(game, 'human', coordinate),
+    initialGameState,
+  );
 }
 
 describe('an intersection that had no stone placed on it is empty', () => {
-  const empty = expect.objectContaining({ kind: 'empty' });
-
   test('in a new game', () => {
     expect(statusAt(initialGameState, { x: 0, y: 0 })).toEqual(empty);
   });
@@ -29,9 +36,6 @@ describe('an intersection that had no stone placed on it is empty', () => {
 });
 
 describe('stones are placed in alternating colors, starting with black', () => {
-  const black = expect.objectContaining({ kind: 'black' });
-  const white = expect.objectContaining({ kind: 'white' });
-
   test('when a single stone has been placed', () => {
     const game = play({ x: 0, y: 0 });
 
@@ -84,6 +88,82 @@ describe('the turn alternates between the players, starting with black', () => {
   });
 });
 
+describe('a player can make a move in his own turn', () => {
+  test('when the player is human', () => {
+    const game: GameState = { ...initialGameState, mode: 'ai' };
+
+    const nextGame = placeStone(game, 'human', { x: 0, y: 0 });
+
+    expect(statusAt(nextGame, { x: 0, y: 0 })).toEqual(black);
+  });
+
+  test('when the player is AI', () => {
+    const initialGame: GameState = { ...initialGameState, mode: 'ai' };
+    const game = placeStone(initialGame, 'human', { x: 0, y: 0 });
+
+    const nextGame = placeStone(game, 'ai', { x: 1, y: 0 });
+
+    expect(statusAt(nextGame, { x: 1, y: 0 })).toEqual(white);
+  });
+});
+
+describe('a player cannot make a move not in his turn', () => {
+  test('when the player is human', () => {
+    const initialGame: GameState = { ...initialGameState, mode: 'ai' };
+    const game = placeStone(initialGame, 'human', { x: 0, y: 0 });
+
+    expect(placeStone(game, 'human', { x: 1, y: 0 })).toBe(game);
+  });
+
+  test('when the player is AI', () => {
+    const game: GameState = { ...initialGameState, mode: 'ai' };
+
+    expect(placeStone(game, 'ai', { x: 0, y: 0 })).toBe(game);
+  });
+});
+
+test('AI chooses an empty intersection on the board on its turn', () => {
+  const game: GameState = {
+    ...play({ x: -7, y: 7 }, { x: 0, y: 0 }, { x: 7, y: -7 }),
+    mode: 'ai',
+  };
+
+  const move = chooseAiMove(game);
+
+  assert(move !== undefined, 'AI should choose a move on its turn');
+  expect(boardCoordinates).toContainEqual(move);
+  expect(statusAt(game, move)).toEqual(empty);
+});
+
+describe('AI chooses no move', () => {
+  test('when the game is in manual mode', () => {
+    const game = play({ x: 0, y: 0 });
+
+    expect(chooseAiMove(game)).toBeUndefined();
+  });
+
+  test('when it is the human player\'s turn', () => {
+    const game: GameState = { ...initialGameState, mode: 'ai' };
+
+    expect(chooseAiMove(game)).toBeUndefined();
+  });
+
+  test('when the game ends', () => {
+    const game: GameState = {
+      ...play(
+        { x: 0, y: 0 }, { x: 0, y: 7 },
+        { x: 1, y: 0 }, { x: 1, y: 7 },
+        { x: 2, y: 0 }, { x: 2, y: 7 },
+        { x: 3, y: 0 }, { x: 3, y: 7 },
+        { x: 4, y: 0 },
+      ),
+      mode: 'ai',
+    };
+
+    expect(chooseAiMove(game)).toBeUndefined();
+  });
+});
+
 describe('an intersection that was played last is marked as the last move', () => {
   test('when it has the only stone on the board', () => {
     const game = play({ x: 0, y: 0 });
@@ -110,10 +190,22 @@ test('an intersection that was not played last is not marked as the last move', 
   expect(statusAt(game, { x: 0, y: 0 })).toHaveProperty('isLastMove', false);
 });
 
+describe('AI cannot place stones in manual mode', () => {
+  test('when it is black\'s turn', () => {
+    expect(placeStone(initialGameState, 'ai', { x: 0, y: 0 })).toBe(initialGameState);
+  });
+
+  test('when it is white\'s turn', () => {
+    const game = play({ x: 0, y: 0 });
+
+    expect(placeStone(game, 'ai', { x: 1, y: 0 })).toBe(game);
+  });
+});
+
 test('trying to place a stone on an occupied intersection does nothing', () => {
   const game = play({ x: 0, y: 0 });
 
-  expect(placeStone(game, { x: 0, y: 0 })).toBe(game);
+  expect(placeStone(game, 'human', { x: 0, y: 0 })).toBe(game);
 });
 
 describe('an intersection that was previewed since the last play is marked as previewed', () => {
@@ -145,7 +237,7 @@ describe('an intersection that was not previewed since the last play is not mark
 
   test('when a stone was placed after it was previewed', () => {
     let game = previewOrPlaceStone(initialGameState, { x: 0, y: 0 });
-    game = placeStone(game, { x: 1, y: 0 });
+    game = placeStone(game, 'human', { x: 1, y: 0 });
 
     expect(statusAt(game, { x: 0, y: 0 })).toHaveProperty('isPreviewed', false);
   });
@@ -155,14 +247,14 @@ test('previewing and then confirming is the same as placing a stone directly', (
   let game = previewOrPlaceStone(initialGameState, { x: 0, y: 0 });
   game = previewOrPlaceStone(game, { x: 0, y: 0 });
 
-  expect(game).toEqual(placeStone(initialGameState, { x: 0, y: 0 }));
+  expect(game).toEqual(placeStone(initialGameState, 'human', { x: 0, y: 0 }));
 });
 
 test('previewing and then placing a stone is the same as placing a stone directly', () => {
   let game = previewOrPlaceStone(initialGameState, { x: 0, y: 0 });
-  game = placeStone(game, { x: 0, y: 0 });
+  game = placeStone(game, 'human', { x: 0, y: 0 });
 
-  expect(game).toEqual(placeStone(initialGameState, { x: 0, y: 0 }));
+  expect(game).toEqual(placeStone(initialGameState, 'human', { x: 0, y: 0 }));
 });
 
 test('trying to preview an occupied intersection does nothing', () => {
@@ -359,7 +451,7 @@ describe('the game does not change once it has been won', () => {
   );
 
   test('when trying to place a stone', () => {
-    expect(placeStone(game, { x: 2, y: 3 })).toBe(game);
+    expect(placeStone(game, 'human', { x: 2, y: 3 })).toBe(game);
   });
 
   test('when trying to preview an intersection', () => {
